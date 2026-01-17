@@ -1,0 +1,1 @@
+worker: cd apps/collector && python -m src.main
