@@ -1,6 +1,0 @@
-[build]
-builder = "NIXPACKS"
-
-[deploy]
-startCommand = "cd apps/collector && python -m src.main"
-restartPolicyType = "ON_FAILURE"
