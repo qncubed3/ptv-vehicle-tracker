@@ -1,6 +1,5 @@
 import time
 from datetime import datetime
-
 from .config import load_config, print_config
 from .ptv_client import PTVClient
 from .db import create_database
