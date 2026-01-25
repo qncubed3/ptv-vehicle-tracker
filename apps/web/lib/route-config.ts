@@ -13,7 +13,7 @@ export interface RouteConfig {
 }
 
 export async function getRouteConfig(): Promise<RouteConfig> {
-    const supabase = await createClient()
+    const supabase = createClient()
     const { data: routes, error } = await supabase.from("vehicle_routes").select("*")
 
     if (error || !routes) {
