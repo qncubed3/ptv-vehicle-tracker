@@ -1,7 +1,10 @@
-import type { NextConfig } from "next";
+// apps/web/next.config.ts
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  cacheComponents: true,
-};
+  experimental: {
+    cacheComponents: false,
+  },
+}
 
-export default nextConfig;
+export default nextConfig
