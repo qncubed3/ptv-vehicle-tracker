@@ -180,7 +180,7 @@ const PTVTrainTracker = () => {
       arrow.style.cssText = `
         position: absolute;
         top: 25px;
-        left: 14px;
+        left: 8px;
         width: 0;
         height: 0;
         border-left: 6px solid transparent;
