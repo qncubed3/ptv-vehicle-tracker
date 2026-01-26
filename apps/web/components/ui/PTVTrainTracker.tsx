@@ -179,8 +179,8 @@ const PTVTrainTracker = () => {
       const arrow = document.createElement('div')
       arrow.style.cssText = `
         position: absolute;
-        top: 28px;      /* circle height */
-        left: 11px;     /* center horizontally (28/2 - 6) */
+        top: 25px;
+        left: 14px;
         width: 0;
         height: 0;
         border-left: 6px solid transparent;
