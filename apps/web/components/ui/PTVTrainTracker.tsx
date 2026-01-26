@@ -135,10 +135,10 @@ const PTVTrainTracker = () => {
       const rotator = document.createElement('div')
       rotator.style.cssText = `
         position: relative;
-        width: 28px;
-        height: 34px;
+        width: 32px;
+        height: 42px;
         transform: rotate(${(vehicle.heading ?? 0) - 180}deg);
-        transform-origin: center 17px;
+        transform-origin: center 16px;
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
       `
 
@@ -148,8 +148,8 @@ const PTVTrainTracker = () => {
         position: absolute;
         top: 0;
         left: 0;
-        width: 34px;
-        height: 34px;
+        width: 32px;
+        height: 32px;
         background: ${routeColor};
         color: white;
         border: 2px solid white;
@@ -179,8 +179,8 @@ const PTVTrainTracker = () => {
       const arrow = document.createElement('div')
       arrow.style.cssText = `
         position: absolute;
-        top: 28px;
-        left: 8px;
+        top: 32px;
+        left: 10px;
         width: 0;
         height: 0;
         border-left: 6px solid transparent;
