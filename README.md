@@ -1,4 +1,5 @@
 # PTV Vehicle Tracker 
+![Live vehicle map showing trains and trams across Melbourne](assets/project-image.png)
 A web application that displays live locations of Public Transport Victoria (PTV) vehicles (trains, trams, buses) on an intereactive map. Users can view history of vehicle locations with a animated playback feature.
 
 ## Architecture
