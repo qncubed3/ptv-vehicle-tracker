@@ -91,31 +91,93 @@ const PTVTrainTracker = () => {
 
     // Add new markers
     vehicles.forEach(vehicle => {
-      const el = document.createElement('div')
+      // const el = document.createElement('div')
 
+      // const routeId = vehicle.route_id
+      // // ✅ Fixed: Safe access with optional chaining
+      // const route = routeId ? getRoute[routeId] : null
+      // const routeCode = route?.route_code ?? 'N/A'
+      // const routeColor = route?.route_color ?? 'gray'
+
+      // el.className = 'train-marker'
+      // el.innerHTML = routeCode
+      // el.style.cssText = `
+      //   background: ${routeColor};
+      //   color: white;
+      //   border: 2px solid white;
+      //   border-radius: 50%;
+      //   width: 24px;
+      //   height: 24px;
+      //   display: flex;
+      //   align-items: center;
+      //   justify-content: center;
+      //   font-size: 10px;
+      //   font-weight: light;
+      //   cursor: pointer;
+      //   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      // `
       const routeId = vehicle.route_id
-      // ✅ Fixed: Safe access with optional chaining
       const route = routeId ? getRoute[routeId] : null
       const routeCode = route?.route_code ?? 'N/A'
       const routeColor = route?.route_color ?? 'gray'
 
-      el.className = 'train-marker'
-      el.innerHTML = routeCode
+      // Wrapper (handles rotation)
+      const el = document.createElement('div')
+      el.className = 'train-marker-wrapper'
       el.style.cssText = `
+        position: relative;
+        width: 24px;
+        height: 30px;
+        transform: rotate(${vehicle.heading ?? 0}deg);
+        transform-origin: center 12px;
+        cursor: pointer;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+        transition: transform 0.4s linear;
+      `
+
+      // Circle
+      const circle = document.createElement('div')
+      circle.innerText = routeCode
+      circle.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 24px;
+        height: 24px;
         background: ${routeColor};
         color: white;
         border: 2px solid white;
         border-radius: 50%;
-        width: 24px;
-        height: 24px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 10px;
-        font-weight: light;
-        cursor: pointer;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        font-weight: 400;
+        z-index: 2;
       `
+
+      // Direction arrow (triangle)
+      const arrow = document.createElement('div')
+      arrow.style.cssText = `
+        position: absolute;
+        top: 18px;
+        left: 6px;
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 10px solid white;
+        z-index: 1;
+      `
+
+      // Hide arrow if heading is missing
+      if (vehicle.heading == null) {
+        arrow.style.display = 'none'
+      }
+
+      el.appendChild(circle)
+      el.appendChild(arrow)
+
 
       const marker = new mapboxgl.Marker(el)
         .setLngLat([vehicle.longitude, vehicle.latitude])
