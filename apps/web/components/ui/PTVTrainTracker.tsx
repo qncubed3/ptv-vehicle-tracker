@@ -93,11 +93,11 @@ const PTVTrainTracker = () => {
     vehicles.forEach(vehicle => {
       // const el = document.createElement('div')
 
-      // const routeId = vehicle.route_id
+      const routeId = vehicle.route_id
       // // ✅ Fixed: Safe access with optional chaining
-      // const route = routeId ? getRoute[routeId] : null
-      // const routeCode = route?.route_code ?? 'N/A'
-      // const routeColor = route?.route_color ?? 'gray'
+      const route = routeId ? getRoute[routeId] : null
+      const routeCode = route?.route_code ?? 'N/A'
+      const routeColor = route?.route_color ?? 'gray'
 
       // el.className = 'train-marker'
       // el.innerHTML = routeCode
@@ -116,23 +116,23 @@ const PTVTrainTracker = () => {
       //   cursor: pointer;
       //   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
       // `
-      const routeId = vehicle.route_id
-      const route = routeId ? getRoute[routeId] : null
-      const routeCode = route?.route_code ?? 'N/A'
-      const routeColor = route?.route_color ?? 'gray'
-
-      // Wrapper (handles rotation)
+      // OUTER wrapper (Mapbox positions this)
       const el = document.createElement('div')
-      el.className = 'train-marker-wrapper'
       el.style.cssText = `
+        width: 24px;
+        height: 30px;
+        pointer-events: auto;
+      `
+
+      // INNER wrapper (WE rotate this)
+      const rotator = document.createElement('div')
+      rotator.style.cssText = `
         position: relative;
         width: 24px;
         height: 30px;
         transform: rotate(${vehicle.heading ?? 0}deg);
         transform-origin: center 12px;
-        cursor: pointer;
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
-        transition: transform 0.4s linear;
       `
 
       // Circle
@@ -152,31 +152,30 @@ const PTVTrainTracker = () => {
         align-items: center;
         justify-content: center;
         font-size: 10px;
-        font-weight: 400;
         z-index: 2;
       `
 
-      // Direction arrow (triangle)
+      // Arrow (POINTS NORTH)
       const arrow = document.createElement('div')
       arrow.style.cssText = `
         position: absolute;
-        top: 18px;
+        top: -8px;
         left: 6px;
         width: 0;
         height: 0;
         border-left: 6px solid transparent;
         border-right: 6px solid transparent;
-        border-top: 10px solid white;
+        border-bottom: 8px solid white;
         z-index: 1;
       `
 
-      // Hide arrow if heading is missing
       if (vehicle.heading == null) {
         arrow.style.display = 'none'
       }
 
-      el.appendChild(circle)
-      el.appendChild(arrow)
+      rotator.appendChild(circle)
+      rotator.appendChild(arrow)
+      el.appendChild(rotator)
 
 
       const marker = new mapboxgl.Marker(el)
