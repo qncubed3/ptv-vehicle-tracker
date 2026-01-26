@@ -93,11 +93,11 @@ const PTVTrainTracker = () => {
     vehicles.forEach(vehicle => {
       // const el = document.createElement('div')
 
-      const routeId = vehicle.route_id
+      // const routeId = vehicle.route_id
       // // ✅ Fixed: Safe access with optional chaining
-      const route = routeId ? getRoute[routeId] : null
-      const routeCode = route?.route_code ?? 'N/A'
-      const routeColor = route?.route_color ?? 'gray'
+      // const route = routeId ? getRoute[routeId] : null
+      // const routeCode = route?.route_code ?? 'N/A'
+      // const routeColor = route?.route_color ?? 'gray'
 
       // el.className = 'train-marker'
       // el.innerHTML = routeCode
@@ -117,33 +117,39 @@ const PTVTrainTracker = () => {
       //   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
       // `
       // OUTER wrapper (Mapbox positions this)
+      // Route info
+      const routeId = vehicle.route_id
+      const route = routeId ? getRoute[routeId] : null
+      const routeCode = route?.route_code ?? 'N/A'
+      const routeColor = route?.route_color ?? 'gray'
+
+      // OUTER element (Mapbox positions this — DO NOT TRANSFORM)
       const el = document.createElement('div')
       el.style.cssText = `
-        width: 24px;
-        height: 30px;
+        width: 28px;
+        height: 34px;
         pointer-events: auto;
       `
 
-      // INNER wrapper (WE rotate this)
+      // INNER rotator (visual rotation only)
       const rotator = document.createElement('div')
       rotator.style.cssText = `
         position: relative;
-        width: 24px;
-        height: 30px;
+        width: 28px;
+        height: 34px;
         transform: rotate(${vehicle.heading ?? 0}deg);
-        transform-origin: center 12px;
+        transform-origin: center 14px;
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
       `
 
-      // Circle
+      // CIRCLE
       const circle = document.createElement('div')
-      circle.innerText = routeCode
       circle.style.cssText = `
         position: absolute;
         top: 0;
         left: 0;
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
         background: ${routeColor};
         color: white;
         border: 2px solid white;
@@ -151,31 +157,47 @@ const PTVTrainTracker = () => {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 10px;
-        z-index: 2;
+        font-size: 11px;
+        z-index: 1;
       `
 
-      // Arrow (POINTS NORTH)
+      // TEXT (counter-rotated so it stays upright)
+      const label = document.createElement('div')
+      label.innerText = routeCode
+      label.style.cssText = `
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: rotate(${-(vehicle.heading ?? 0)}deg);
+      `
+
+      circle.appendChild(label)
+
+      // ARROW (points NORTH by default)
       const arrow = document.createElement('div')
       arrow.style.cssText = `
         position: absolute;
-        top: -8px;
-        left: 6px;
+        top: 20px;
+        left: 8px;
         width: 0;
         height: 0;
         border-left: 6px solid transparent;
         border-right: 6px solid transparent;
-        border-bottom: 8px solid white;
-        z-index: 1;
+        border-bottom: 10px solid white;
+        z-index: 0;
       `
 
       if (vehicle.heading == null) {
         arrow.style.display = 'none'
       }
 
+      // Assemble
       rotator.appendChild(circle)
       rotator.appendChild(arrow)
       el.appendChild(rotator)
+
 
 
       const marker = new mapboxgl.Marker(el)
