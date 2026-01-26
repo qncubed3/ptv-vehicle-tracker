@@ -3,6 +3,7 @@ from datetime import datetime
 from .config import load_config, print_config
 from .ptv_client import PTVClient
 from .db import create_database
+from .route_corrections import correct_route_id
 
 
 class VehicleCollector:
@@ -90,6 +91,14 @@ class VehicleCollector:
             # Filter vehicles that should be stored
             vehicles_to_store = []
             for vehicle in vehicles:
+
+                vehicle['route_id'] = correct_route_id(
+                    vehicle.get('longitude'),
+                    vehicle.get('latitude'),
+                    vehicle.get('route_id'),
+                    vehicle.get('vehicle_id')
+                )
+
                 if self.should_store(vehicle):
                     vehicles_to_store.append(vehicle)
                     # Update cache
