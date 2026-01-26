@@ -170,7 +170,7 @@ const PTVTrainTracker = () => {
         display: flex;
         align-items: center;
         justify-content: center;
-        transform: rotate(${-(vehicle.heading ?? 0)}deg);
+        transform: rotate(${-(vehicle.heading ?? 0) - 180}deg);
       `
 
       circle.appendChild(label)
