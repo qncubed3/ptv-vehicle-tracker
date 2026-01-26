@@ -179,13 +179,13 @@ const PTVTrainTracker = () => {
       const arrow = document.createElement('div')
       arrow.style.cssText = `
         position: absolute;
-        top: 20px;
-        left: 8px;
+        top: 28px;      /* circle height */
+        left: 11px;     /* center horizontally (28/2 - 6) */
         width: 0;
         height: 0;
         border-left: 6px solid transparent;
         border-right: 6px solid transparent;
-        border-bottom: 10px solid white;
+        border-top: 10px solid white;  /* points DOWN for teardrop shape */
         z-index: 0;
       `
 
