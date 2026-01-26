@@ -21,6 +21,8 @@ declare global {
   }
 }
 
+const REFRESH_INTERVAL = parseInt(process.env.NEXT_PUBLIC_REFRESH_INTERVAL_MS || '30000')
+
 const PTVTrainTracker = () => {
   const mapRef = useRef<MapboxMap | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -54,7 +56,7 @@ const PTVTrainTracker = () => {
 
       // Fetch trains and refresh every 30 seconds
       fetchAndUpdateVehicles()
-      const interval = setInterval(fetchAndUpdateVehicles, 30000)
+      const interval = setInterval(fetchAndUpdateVehicles, REFRESH_INTERVAL)
       
       // Cleanup interval on unmount
       return () => clearInterval(interval)
