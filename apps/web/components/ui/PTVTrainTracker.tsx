@@ -137,7 +137,7 @@ const PTVTrainTracker = () => {
         position: relative;
         width: 28px;
         height: 34px;
-        transform: rotate(${vehicle.heading ?? 0}deg);
+        transform: rotate(${(vehicle.heading ?? 0) - 180}deg);
         transform-origin: center 14px;
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
       `
