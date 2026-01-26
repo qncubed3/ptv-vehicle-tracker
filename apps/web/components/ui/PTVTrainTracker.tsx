@@ -9,6 +9,7 @@ type Vehicle = Tables<'vehicle_locations'>
 // Define types for Mapbox
 interface MapboxMap {
   remove: () => void
+  getBearing: () => number
 }
 
 interface MapboxMarker {
@@ -122,6 +123,7 @@ const PTVTrainTracker = () => {
       const route = routeId ? getRoute[routeId] : null
       const routeCode = route?.route_code ?? 'N/A'
       const routeColor = route?.route_color ?? 'gray'
+      const bearing = mapRef.current?.getBearing() ?? 0
 
       // OUTER element (Mapbox positions this — DO NOT TRANSFORM)
       const el = document.createElement('div')
@@ -137,7 +139,7 @@ const PTVTrainTracker = () => {
         position: relative;
         width: 32px;
         height: 42px;
-        transform: rotate(${(vehicle.heading ?? 0) - 180}deg);
+        transform: rotate(${(vehicle.heading ?? 0) - bearing - 180}deg);
         transform-origin: center 16px;
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
       `
@@ -170,7 +172,7 @@ const PTVTrainTracker = () => {
         display: flex;
         align-items: center;
         justify-content: center;
-        transform: rotate(${-(vehicle.heading ?? 0) - 180}deg);
+        transform: rotate(${-(vehicle.heading ?? 0) - bearing - 180}deg);
       `
 
       circle.appendChild(label)
@@ -179,7 +181,7 @@ const PTVTrainTracker = () => {
       const arrow = document.createElement('div')
       arrow.style.cssText = `
         position: absolute;
-        top: 32px;
+        top: 28px;
         left: 10px;
         width: 0;
         height: 0;
