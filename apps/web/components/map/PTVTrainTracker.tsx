@@ -24,6 +24,7 @@ export default function PTVTrainTracker() {
 	const mapContainerRef = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<MapboxMap | null>(null)
 	const markersRef = useRef<MapboxMarker[]>([])
+	const [mapError, setMapError] = useState<string | null>(null)
 
 	// Current and historical vehicle location data
 	const currentVehiclesRef = useRef<Vehicle[]>([])
@@ -86,7 +87,20 @@ export default function PTVTrainTracker() {
 		async function setup() {
 
 			// Create Mapbox map
-			const map = await initialiseMapboxMap(mapContainerRef.current!)
+			let map: MapboxMap
+
+			try {
+				map = await initialiseMapboxMap(mapContainerRef.current!)
+			} catch (error) {
+
+				console.error('Failed to initialise map:', error)
+
+				setMapError(
+					'Failed to initialise WebGL map. Your browser or GPU may not support Mapbox rendering. Try opening this app in a different browser.'
+				)
+
+				return
+			}
 
 			// Component may have unmounted while map was loading
 			if (cancelled) {
@@ -196,7 +210,7 @@ export default function PTVTrainTracker() {
 		try {
 			setHistoryLoading(true)
 
-			const vehicles = await fetchVehicleHistory(HISTORY_SECONDS)
+			const vehicles = await fetchVehicleHistory(HISTORY_SECONDS + 300)
 
 			historyVehiclesRef.current = vehicles.sort(
 				(a, b) =>
@@ -274,6 +288,19 @@ export default function PTVTrainTracker() {
 
 	return (
 		<div className="relative w-full h-screen">
+			{mapError && (
+				<div className="absolute inset-0 z-50 flex items-center justify-center bg-black">
+					<div className="max-w-md rounded-2xl border border-red-500/20 bg-zinc-900 px-8 py-6 text-center shadow-2xl">
+						<div className="mb-3 text-xl font-semibold text-white">
+							Map Failed to Load
+						</div>
+
+						<div className="text-sm leading-relaxed text-zinc-300">
+							{mapError}
+						</div>
+					</div>
+				</div>
+			)}
 			<div ref={mapContainerRef} className="w-full h-full" />
 
 			{timeWindow && (

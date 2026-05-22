@@ -22,7 +22,12 @@ export function HistorySlider({
     onChange
 }: HistorySliderProps) {
     return (
-        <div className="absolute bottom-5 left-1/2 z-10 w-[min(720px,calc(100%-32px))] -translate-x-1/2">
+        <div
+            className="absolute left-1/2 z-10 w-[min(720px,calc(100%-32px))] -translate-x-1/2 px-2"
+            style={{
+                bottom: 'max(16px, env(safe-area-inset-bottom))'
+            }}
+        >
             <div className="flex items-center gap-3 rounded-full border border-white/10 bg-black/35 px-3 pr-5 py-2 shadow-lg backdrop-blur-md">
                 <button
                     type="button"

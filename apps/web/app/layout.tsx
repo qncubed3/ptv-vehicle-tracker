@@ -12,9 +12,43 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
 	metadataBase: new URL(defaultUrl),
-	title: "Next.js and Supabase Starter Kit",
-	description: "The fastest way to build apps with Next.js and Supabase",
-};
+
+	title: {
+		default: 'Melbourne PTV Vehicle Tracker',
+		template: '%s | Melbourne PTV Vehicle Tracker',
+	},
+
+	description:
+		'Realtime and historical tracking of Melbourne public transport vehicles with live map visualisation and playback.',
+
+	keywords: [
+		'PTV',
+		'Melbourne transport',
+		'tram tracker',
+		'train tracker',
+		'bus tracker',
+		'Mapbox',
+		'public transport',
+		'GTFS realtime',
+		'Melbourne'
+	],
+
+	openGraph: {
+		title: 'Melbourne PTV Vehicle Tracker',
+		description:
+			'Realtime and historical tracking of Melbourne public transport vehicles.',
+		url: defaultUrl,
+		siteName: 'Melbourne PTV Vehicle Tracker',
+		type: 'website',
+	},
+
+	twitter: {
+		card: 'summary_large_image',
+		title: 'Melbourne PTV Vehicle Tracker',
+		description:
+			'Realtime and historical tracking of Melbourne public transport vehicles.',
+	},
+}
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
