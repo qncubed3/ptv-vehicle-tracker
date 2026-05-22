@@ -287,7 +287,7 @@ export default function PTVTrainTracker() {
 	}
 
 	return (
-		<div className="relative w-full h-screen">
+		<div className="relative h-[100dvh] w-full overflow-hidden">
 			{mapError && (
 				<div className="absolute inset-0 z-50 flex items-center justify-center bg-black">
 					<div className="max-w-md rounded-2xl border border-red-500/20 bg-zinc-900 px-8 py-6 text-center shadow-2xl">
