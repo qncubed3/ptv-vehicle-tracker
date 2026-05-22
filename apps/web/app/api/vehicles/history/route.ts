@@ -1,60 +1,59 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export async function GET(request: Request) {
-  try {
-    const supabase = await createClient()
-    const { searchParams } = new URL(request.url)
-    
-    const vehicleId = searchParams.get('vehicle_id')
-    const hours = parseInt(searchParams.get('hours') || '24')
-    const routeId = searchParams.get('route_id')
-    const limit = parseInt(searchParams.get('limit') || '10000')
+export async function GET(request: NextRequest) {
+	
+	try {
+		const supabase = await createClient()
 
-    let query = supabase
-      .from('vehicle_locations')
-      .select('*')
-      .gte('timestamp', new Date(Date.now() - hours * 60 * 60 * 1000).toISOString())
-      .order('timestamp', { ascending: true })
-      .limit(limit)
+		const secondsParam = request.nextUrl.searchParams.get('seconds')
+		const seconds = secondsParam ? parseInt(secondsParam, 10) : 3600
 
-    // Filter by vehicle_id if provided
-    if (vehicleId) {
-      query = query.eq('vehicle_id', vehicleId)
-    }
+		if (Number.isNaN(seconds) || seconds <= 0) {
+			return NextResponse.json(
+				{ error: 'Invalid seconds parameter' },
+				{ status: 400 }
+			)
+		}
 
-    // Filter by route_id if provided
-    if (routeId) {
-      query = query.eq('route_id', routeId)
-    }
+		const now = new Date()
+		const cutoff = new Date(now.getTime() - seconds * 1000).toISOString()
 
-    const { data, error } = await query
+		const { data, error } = await supabase
+			.from('vehicle_locations')
+			.select('*')
+			.gte('created_at', cutoff)
+			.lte('created_at', now.toISOString())
+			.order('created_at', { ascending: false })
+			.limit(10000)
 
-    if (error) throw error
+		if (error) {
+			console.error('Supabase error:', error)
 
-    // Group by vehicle_id for easier client-side processing
-    const grouped = data.reduce((acc, vehicle) => {
-      if (!acc[vehicle.vehicle_id]) {
-        acc[vehicle.vehicle_id] = []
-      }
-      acc[vehicle.vehicle_id].push(vehicle)
-      return acc
-    }, {} as Record<string, typeof data>)
+			return NextResponse.json(
+				{
+					error: error.message,
+					details: error.details,
+					hint: error.hint,
+					code: error.code
+				},
+				{ status: 500 }
+			)
+		}
 
-    return NextResponse.json({
-      vehicles: grouped,
-      vehicleCount: Object.keys(grouped).length,
-      totalPoints: data.length,
-      timeRange: {
-        start: data[0]?.timestamp,
-        end: data[data.length - 1]?.timestamp
-      }
-    })
-  } catch (error) {
-    console.error('Error fetching history:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch history' },
-      { status: 500 }
-    )
-  }
+		return NextResponse.json({
+			vehicles: data,
+			count: data.length,
+			seconds,
+			from: cutoff,
+			to: now.toISOString()
+		})
+	} catch (error) {
+		console.error('Error fetching vehicles:', error)
+
+		return NextResponse.json(
+			{ error: 'Failed to fetch vehicles' },
+			{ status: 500 }
+		)
+	}
 }
