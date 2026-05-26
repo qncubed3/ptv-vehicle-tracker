@@ -1,3 +1,4 @@
+// PTVTrainTracker.tsx
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
@@ -5,7 +6,12 @@ import type { Tables } from '@/lib/database/types'
 import { useRouteConfig } from '@/app/providers'
 import { initialiseMapboxMap } from './mapbox'
 import { fetchCurrentVehicles, fetchVehicleHistory } from './vehicleApi'
-import { renderVehicleMarkers, type MapboxMarker, type MapboxMap } from './vehicleMarkers'
+import {
+	renderVehicleMarkers,
+	removeAllVehicleMarkers,
+	type VehicleMarkerRecord,
+	type MapboxMap
+} from './vehicleMarkers'
 import { HistorySlider } from './HistorySlider'
 import { getLatestVehiclesBeforeTime } from '@/lib/vehicles/timeFilter'
 
@@ -14,48 +20,36 @@ type TrackerMode = 'live' | 'history'
 
 const REFRESH_INTERVAL = parseInt(process.env.NEXT_PUBLIC_REFRESH_INTERVAL_MS || '30000')
 const HISTORY_SECONDS = 900
+const PLAYBACK_SECONDS_FOR_FULL_RANGE = 10
 
 export default function PTVTrainTracker() {
+	const routesById = useRouteConfig().routesById
 
-	// Load vehicle route data
-	const getRoute = useRouteConfig().routesById
-
-	// Map object references
 	const mapContainerRef = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<MapboxMap | null>(null)
-	const markersRef = useRef<MapboxMarker[]>([])
-	const [mapError, setMapError] = useState<string | null>(null)
+	const markersRef = useRef<Map<string, VehicleMarkerRecord>>(new Map())
 
-	// Current and historical vehicle location data
 	const currentVehiclesRef = useRef<Vehicle[]>([])
 	const historyVehiclesRef = useRef<Vehicle[]>([])
+
+	const [mapError, setMapError] = useState<string | null>(null)
 	const [historyLoading, setHistoryLoading] = useState(false)
-
-	// Live or historical tracking mode
 	const [trackerMode, setTrackerMode] = useState<TrackerMode>('live')
-
-	// Slider states
 	const [isPlaying, setIsPlaying] = useState(false)
 	const [sliderValue, setSliderValue] = useState(100)
 
-	// Define time window for slider, store in state after mount to avoid server/client hydration issues
 	const [timeWindow, setTimeWindow] = useState<{
 		start: Date
 		end: Date
 	} | null>(null)
 
 	useEffect(() => {
-
-		// Get current time
 		const end = new Date()
-
-		// Predetermined beginning of playback
 		const start = new Date(end.getTime() - HISTORY_SECONDS * 1000)
 
 		setTimeWindow({ start, end })
 	}, [])
 
-	// Convert slider position (0-100) to a timestampe in the predefined range
 	const sliderTimestamp = timeWindow
 		? new Date(
 			timeWindow.start.getTime() +
@@ -63,7 +57,6 @@ export default function PTVTrainTracker() {
 		)
 		: null
 
-	// Timestamp display text
 	const sliderTimeLabel = sliderTimestamp
 		? sliderTimestamp.toLocaleTimeString([], {
 			hour: '2-digit',
@@ -72,27 +65,18 @@ export default function PTVTrainTracker() {
 		})
 		: '--:--:--'
 
-	
-	
 	useEffect(() => {
-
-		// Avoid creating multiple mapbox instances
 		if (!mapContainerRef.current || mapRef.current) return
 
 		let interval: NodeJS.Timeout | null = null
-
-		// Used to avoid setting state after unmount
 		let cancelled = false
 
 		async function setup() {
-
-			// Create Mapbox map
 			let map: MapboxMap
 
 			try {
 				map = await initialiseMapboxMap(mapContainerRef.current!)
 			} catch (error) {
-
 				console.error('Failed to initialise map:', error)
 
 				setMapError(
@@ -102,7 +86,6 @@ export default function PTVTrainTracker() {
 				return
 			}
 
-			// Component may have unmounted while map was loading
 			if (cancelled) {
 				map.remove()
 				return
@@ -110,33 +93,23 @@ export default function PTVTrainTracker() {
 
 			mapRef.current = map
 
-			// Load latest vehicle positions immediately
 			await loadCurrentVehicles()
-
-			// Load historical playback data in background
 			void loadHistoryVehicles()
 
-			// Keep live vehicles refreshed
 			interval = setInterval(loadCurrentVehicles, REFRESH_INTERVAL)
 		}
 
 		setup()
 
 		return () => {
-
-			// Prevent async setup from continuing after unmount
 			cancelled = true
 
-			// Stop live polling
 			if (interval) {
 				clearInterval(interval)
 			}
 
-			// Remove all map markers
-			markersRef.current.forEach(marker => marker.remove())
-			markersRef.current = []
+			removeAllVehicleMarkers(markersRef)
 
-			// Remove map instance
 			if (mapRef.current) {
 				mapRef.current.remove()
 				mapRef.current = null
@@ -144,14 +117,11 @@ export default function PTVTrainTracker() {
 		}
 	}, [])
 
-	// Initialise map, load vehicle data, and manage live polling lifecycle
 	useEffect(() => {
 		if (!isPlaying) return
 
 		let animationFrameId: number
 		let previousTime: number | null = null
-
-		const PLAYBACK_SECONDS_FOR_FULL_RANGE = 120
 
 		function animate(currentTime: number) {
 			if (previousTime === null) {
@@ -163,7 +133,6 @@ export default function PTVTrainTracker() {
 
 			setSliderValue(prev => {
 				const increment = (100 / PLAYBACK_SECONDS_FOR_FULL_RANGE) * deltaSeconds
-
 				const next = Math.min(prev + increment, 100)
 
 				if (trackerMode === 'history') {
@@ -184,8 +153,7 @@ export default function PTVTrainTracker() {
 		animationFrameId = requestAnimationFrame(animate)
 
 		return () => cancelAnimationFrame(animationFrameId)
-	}, [isPlaying])
-
+	}, [isPlaying, trackerMode, timeWindow])
 
 	async function loadCurrentVehicles() {
 		try {
@@ -198,7 +166,7 @@ export default function PTVTrainTracker() {
 					map: mapRef.current,
 					markersRef,
 					vehicles,
-					routesById: getRoute
+					routesById
 				})
 			}
 		} catch (error) {
@@ -214,17 +182,12 @@ export default function PTVTrainTracker() {
 
 			historyVehiclesRef.current = vehicles.sort(
 				(a, b) =>
-					// @ts-ignore
-					new Date(a.created_at).getTime() - new Date(b.created_at).getTime()					
+					new Date(a.created_at ?? a.timestamp).getTime() -
+					new Date(b.created_at ?? b.timestamp).getTime()
 			)
 
 			if (trackerMode === 'history') {
-				renderVehicleMarkers({
-					map: mapRef.current,
-					markersRef,
-					vehicles: historyVehiclesRef.current,
-					routesById: getRoute
-				})
+				renderHistoricalVehiclesAtSliderTime(sliderValue)
 			}
 		} catch (error) {
 			console.error('Error fetching vehicle history:', error)
@@ -250,7 +213,7 @@ export default function PTVTrainTracker() {
 			map: mapRef.current,
 			markersRef,
 			vehicles: filteredVehicles,
-			routesById: getRoute
+			routesById
 		})
 	}
 
@@ -262,7 +225,7 @@ export default function PTVTrainTracker() {
 			map: mapRef.current,
 			markersRef,
 			vehicles: currentVehiclesRef.current,
-			routesById: getRoute
+			routesById
 		})
 	}
 
@@ -301,7 +264,8 @@ export default function PTVTrainTracker() {
 					</div>
 				</div>
 			)}
-			<div ref={mapContainerRef} className="w-full h-full" />
+
+			<div ref={mapContainerRef} className="h-full w-full" />
 
 			{timeWindow && (
 				<>
@@ -309,11 +273,10 @@ export default function PTVTrainTracker() {
 						<button
 							type="button"
 							onClick={switchToLiveMode}
-							className={`rounded-full px-3 py-1 transition ${
-								trackerMode === 'live'
+							className={`rounded-full px-3 py-1 transition ${trackerMode === 'live'
 									? 'bg-white text-black'
 									: 'text-white/70 hover:text-white'
-							}`}
+								}`}
 						>
 							Live
 						</button>
@@ -321,15 +284,15 @@ export default function PTVTrainTracker() {
 						<button
 							type="button"
 							onClick={switchToHistoryMode}
-							className={`rounded-full px-3 py-1 transition ${
-								trackerMode === 'history'
+							className={`rounded-full px-3 py-1 transition ${trackerMode === 'history'
 									? 'bg-white text-black'
 									: 'text-white/70 hover:text-white'
-							}`}
+								}`}
 						>
 							History
 						</button>
 					</div>
+
 					<HistorySlider
 						isPlaying={isPlaying}
 						currentTimeLabel={sliderTimeLabel}
@@ -338,11 +301,10 @@ export default function PTVTrainTracker() {
 						onChange={handleSliderChange}
 					/>
 				</>
-				
 			)}
 
-			{historyLoading && (trackerMode == "history") && (
-				<div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+			{historyLoading && trackerMode === 'history' && (
+				<div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
 					<div className="rounded-2xl border border-white/10 bg-black/50 px-8 py-5 text-lg font-medium text-white shadow-2xl backdrop-blur-md">
 						Loading historical vehicle data...
 					</div>

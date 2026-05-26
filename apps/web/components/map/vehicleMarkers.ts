@@ -1,3 +1,4 @@
+// vehicleMarkers.ts
 import type { MutableRefObject } from 'react'
 import type { Tables } from '@/lib/database/types'
 
@@ -9,6 +10,20 @@ export interface MapboxMap {
 
 export interface MapboxMarker {
     remove: () => void
+    setLngLat: (lngLat: [number, number]) => MapboxMarker
+    setPopup: (popup: unknown) => MapboxMarker
+    addTo: (map: MapboxMap) => MapboxMarker
+}
+
+export interface VehicleMarkerRecord {
+    marker: MapboxMarker
+    routeId: string | null
+    routeCode: string
+    routeColor: string
+    rotator: HTMLElement
+    circle: HTMLElement
+    label: HTMLElement
+    arrow: HTMLElement
 }
 
 interface RouteInfo {
@@ -19,7 +34,7 @@ interface RouteInfo {
 
 interface RenderVehicleMarkersArgs {
     map: MapboxMap | null
-    markersRef: MutableRefObject<MapboxMarker[]>
+    markersRef: MutableRefObject<Map<string, VehicleMarkerRecord>>
     vehicles: Vehicle[]
     routesById: Record<string, RouteInfo>
 }
@@ -33,39 +48,180 @@ export function renderVehicleMarkers({
     if (!map) return
 
     const mapboxgl = window.mapboxgl
-
-    markersRef.current.forEach(marker => marker.remove())
-    markersRef.current = []
+    const visibleVehicleIds = new Set<string>()
 
     vehicles.forEach(vehicle => {
-        const markerElement = createVehicleMarkerElement(vehicle, routesById)
-        const popupHtml = createVehiclePopupHtml(vehicle, routesById)
+        const vehicleId = vehicle.vehicle_id
 
-        const marker = new mapboxgl.Marker(markerElement)
+        if (!vehicleId) return
+
+        visibleVehicleIds.add(vehicleId)
+
+        const existingRecord = markersRef.current.get(vehicleId)
+
+        if (existingRecord) {
+            updateExistingVehicleMarker(existingRecord, vehicle, routesById)
+            return
+        }
+
+        const newRecord = createVehicleMarkerRecord(mapboxgl, vehicle, routesById)
+
+        newRecord.marker
             .setLngLat([vehicle.longitude, vehicle.latitude])
-            .setPopup(
-                new mapboxgl.Popup({
-                    offset: 25,
-                    closeButton: true,
-                    closeOnClick: true,
-                    className: 'vehicle-popup'
-                }).setHTML(popupHtml)
-            )
+            .setPopup(createVehiclePopup(mapboxgl, vehicle, routesById))
             .addTo(map)
 
-        markersRef.current.push(marker)
+        markersRef.current.set(vehicleId, newRecord)
+    })
+
+    markersRef.current.forEach((record, vehicleId) => {
+        if (!visibleVehicleIds.has(vehicleId)) {
+            record.marker.remove()
+            markersRef.current.delete(vehicleId)
+        }
     })
 }
 
-function createVehiclePopupHtml(
+export function removeAllVehicleMarkers(
+    markersRef: MutableRefObject<Map<string, VehicleMarkerRecord>>
+) {
+    markersRef.current.forEach(record => record.marker.remove())
+    markersRef.current.clear()
+}
+
+function updateExistingVehicleMarker(
+    record: VehicleMarkerRecord,
+    vehicle: Vehicle,
+    routesById: Record<string, RouteInfo>
+) {
+    record.marker.setLngLat([vehicle.longitude, vehicle.latitude])
+
+    updateVehicleMotion(record, vehicle)
+
+    const route = getRouteInfo(vehicle, routesById)
+
+    const routeChanged =
+        record.routeId !== vehicle.route_id ||
+        record.routeCode !== route.routeCode ||
+        record.routeColor !== route.routeColor
+
+    if (!routeChanged) return
+
+    record.routeId = vehicle.route_id
+    record.routeCode = route.routeCode
+    record.routeColor = route.routeColor
+
+    record.label.innerText = route.routeCode
+    record.circle.style.background = route.routeColor
+
+    record.marker.setPopup(createVehiclePopup(window.mapboxgl, vehicle, routesById))
+}
+
+function updateVehicleMotion(
+    record: VehicleMarkerRecord,
+    vehicle: Vehicle
+) {
+    const heading = vehicle.heading ?? 0
+
+    record.rotator.style.transform = `rotate(${heading - 180}deg)`
+    record.label.style.transform = `rotate(${-heading - 180}deg)`
+    record.arrow.style.display = vehicle.heading == null ? 'none' : ''
+}
+
+function createVehicleMarkerRecord(
+    mapboxgl: typeof window.mapboxgl,
+    vehicle: Vehicle,
+    routesById: Record<string, RouteInfo>
+): VehicleMarkerRecord {
+    const route = getRouteInfo(vehicle, routesById)
+    const heading = vehicle.heading ?? 0
+
+    const el = document.createElement('div')
+    el.className = 'h-[34px] w-7 pointer-events-auto'
+
+    const rotator = document.createElement('div')
+    rotator.className = 'relative h-[42px] w-8 drop-shadow-md'
+    rotator.style.transform = `rotate(${heading - 180}deg)`
+    rotator.style.transformOrigin = 'center 16px'
+
+    const circle = document.createElement('div')
+    circle.className = [
+        'absolute left-0 top-0 z-[1]',
+        'flex h-8 w-8 items-center justify-center',
+        'rounded-full border-2 border-white',
+        'text-[11px] text-white'
+    ].join(' ')
+    circle.style.background = route.routeColor
+
+    const label = document.createElement('div')
+    label.innerText = route.routeCode
+    label.className = 'flex h-full w-full items-center justify-center'
+    label.style.transform = `rotate(${-heading - 180}deg)`
+
+    circle.appendChild(label)
+
+    const arrow = document.createElement('div')
+    arrow.className = [
+        'absolute left-[10px] top-7 z-0',
+        'h-0 w-0',
+        'border-l-[6px] border-r-[6px] border-t-[10px]',
+        'border-l-transparent border-r-transparent border-t-white'
+    ].join(' ')
+
+    if (vehicle.heading == null) {
+        arrow.style.display = 'none'
+    }
+
+    rotator.appendChild(circle)
+    rotator.appendChild(arrow)
+    el.appendChild(rotator)
+
+    const marker = new mapboxgl.Marker(el)
+
+    return {
+        marker,
+        routeId: vehicle.route_id,
+        routeCode: route.routeCode,
+        routeColor: route.routeColor,
+        rotator,
+        circle,
+        label,
+        arrow
+    }
+}
+
+function createVehiclePopup(
+    mapboxgl: typeof window.mapboxgl,
+    vehicle: Vehicle,
+    routesById: Record<string, RouteInfo>
+) {
+    return new mapboxgl.Popup({
+        offset: 25,
+        closeButton: true,
+        closeOnClick: true,
+        className: 'vehicle-popup'
+    }).setHTML(createVehiclePopupHtml(vehicle, routesById))
+}
+
+function getRouteInfo(
     vehicle: Vehicle,
     routesById: Record<string, RouteInfo>
 ) {
     const routeId = vehicle.route_id
     const route = routeId ? routesById[routeId] : null
 
-    const routeName = route?.route_name ?? `Route ${vehicle.route_id ?? 'Unknown'}`
-    const routeColor = route?.route_color ?? '#6b7280'
+    return {
+        routeCode: route?.route_code ?? 'N/A',
+        routeColor: route?.route_color ?? 'gray',
+        routeName: route?.route_name ?? `Route ${vehicle.route_id ?? 'Unknown'}`
+    }
+}
+
+function createVehiclePopupHtml(
+    vehicle: Vehicle,
+    routesById: Record<string, RouteInfo>
+) {
+    const route = getRouteInfo(vehicle, routesById)
 
     const updatedTime = new Date(vehicle.created_at ?? vehicle.timestamp).toLocaleTimeString(
         'en-AU',
@@ -81,10 +237,10 @@ function createVehiclePopupHtml(
         <div class="w-64 overflow-hidden rounded-2xl bg-slate-950 text-white shadow-2xl">
             <div
                 class="px-4 py-3 pr-10"
-                style="background: ${routeColor};"
+                style="background: ${route.routeColor};"
             >
                 <div class="text-sm font-bold leading-snug text-white">
-                    ${routeName}
+                    ${route.routeName}
                 </div>
             </div>
 
@@ -92,6 +248,7 @@ function createVehiclePopupHtml(
                 ${popupRow('Vehicle', vehicle.vehicle_id)}
                 ${popupRow('Route ID', vehicle.route_id ?? 'N/A')}
                 ${popupRow('Direction', vehicle.direction_id?.toString() ?? 'N/A')}
+                ${popupRow('Heading', vehicle.heading?.toString() ?? 'N/A')}
                 ${popupRow('Updated', updatedTime)}
             </div>
         </div>
@@ -126,64 +283,11 @@ function createVehiclePopupHtml(
     `
 }
 
-function popupRow(label: string, value: string) {
+function popupRow(label: string, value: string | null) {
     return `
         <div class="flex items-center justify-between gap-4">
             <span class="text-white/45">${label}</span>
-            <span class="font-medium text-white">${value}</span>
+            <span class="font-medium text-white">${value ?? 'N/A'}</span>
         </div>
     `
-}
-
-function createVehicleMarkerElement(
-    vehicle: Vehicle,
-    routesById: Record<string, RouteInfo>
-) {
-    const routeId = vehicle.route_id
-    const route = routeId ? routesById[routeId] : null
-    const routeCode = route?.route_code ?? 'N/A'
-    const routeColor = route?.route_color ?? 'gray'
-    const heading = vehicle.heading ?? 0
-
-    const el = document.createElement('div')
-    el.className = 'h-[34px] w-7 pointer-events-auto'
-
-    const rotator = document.createElement('div')
-    rotator.className = 'relative h-[42px] w-8 drop-shadow-md'
-    rotator.style.transform = `rotate(${heading - 180}deg)`
-    rotator.style.transformOrigin = 'center 16px'
-
-    const circle = document.createElement('div')
-    circle.className = [
-        'absolute left-0 top-0 z-[1]',
-        'flex h-8 w-8 items-center justify-center',
-        'rounded-full border-2 border-white',
-        'text-[11px] text-white'
-    ].join(' ')
-    circle.style.background = routeColor
-
-    const label = document.createElement('div')
-    label.innerText = routeCode
-    label.className = 'flex h-full w-full items-center justify-center'
-    label.style.transform = `rotate(${-heading - 180}deg)`
-
-    circle.appendChild(label)
-
-    const arrow = document.createElement('div')
-    arrow.className = [
-        'absolute left-[10px] top-7 z-0',
-        'h-0 w-0',
-        'border-l-[6px] border-r-[6px] border-t-[10px]',
-        'border-l-transparent border-r-transparent border-t-white'
-    ].join(' ')
-
-    if (vehicle.heading == null) {
-        arrow.style.display = 'none'
-    }
-
-    rotator.appendChild(circle)
-    rotator.appendChild(arrow)
-    el.appendChild(rotator)
-
-    return el
 }
