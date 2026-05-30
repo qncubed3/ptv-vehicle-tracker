@@ -1,7 +1,10 @@
+// Fetches vehicle data from our Next.js API routes.
+
 import type { Tables } from '@/lib/database/types'
 
 type Vehicle = Tables<'vehicle_locations'>
 
+// Gets the latest position for every vehicle right now.
 export async function fetchCurrentVehicles(): Promise<Vehicle[]> {
     const res = await fetch('/api/vehicles/current')
     const data = await res.json()
@@ -13,13 +16,13 @@ export async function fetchCurrentVehicles(): Promise<Vehicle[]> {
     return data.vehicles ?? []
 }
 
+// Gets historical vehicle positions for the last N seconds.
+// Retries a few times if the request fails.
 export async function fetchVehicleHistory(
     seconds: number,
     retries = 5
 ): Promise<Vehicle[]> {
-
     try {
-
         const res = await fetch(`/api/vehicles/history?seconds=${seconds}`)
 
         let data = null
@@ -42,9 +45,7 @@ export async function fetchVehicleHistory(
         )
 
         return data?.vehicles ?? []
-
     } catch (error) {
-
         if (retries <= 0) {
             throw error
         }
@@ -54,7 +55,7 @@ export async function fetchVehicleHistory(
             error
         )
 
-        // small backoff
+        // Wait briefly before trying again.
         await new Promise(resolve => setTimeout(resolve, 750))
 
         return fetchVehicleHistory(seconds, retries - 1)

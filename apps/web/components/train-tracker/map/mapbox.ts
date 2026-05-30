@@ -1,3 +1,5 @@
+// Loads Mapbox and creates the map instance.
+
 export interface MapboxMap {
     remove: () => void
     dragRotate: {
@@ -15,6 +17,7 @@ declare global {
     }
 }
 
+// Creates a Mapbox map centred on Melbourne.
 export async function initialiseMapboxMap(container: HTMLDivElement): Promise<MapboxMap> {
     await loadMapboxAssets()
 
@@ -28,12 +31,14 @@ export async function initialiseMapboxMap(container: HTMLDivElement): Promise<Ma
         zoom: 10
     })
 
+    // Keep the map flat — we don't need 3D rotation.
     map.dragRotate.disable()
     map.touchZoomRotate.disableRotation()
 
     return map
 }
 
+// Loads the Mapbox CSS and JS from their CDN if not already present.
 function loadMapboxAssets(): Promise<void> {
     return new Promise((resolve, reject) => {
         if (window.mapboxgl) {

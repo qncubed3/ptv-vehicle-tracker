@@ -1,5 +1,7 @@
 'use client'
 
+// Slider at the bottom of the map for scrubbing through history.
+
 import { Pause, Play } from 'lucide-react'
 
 interface HistorySliderProps {

@@ -16,8 +16,13 @@ export async function getRouteConfig(): Promise<RouteConfig> {
     const supabase = createClient()
     const { data: routes, error } = await supabase.from("vehicle_routes").select("*")
 
-    if (error || !routes) {
-        throw new Error("Failed to fetch route config data")
+    if (error) {
+        console.error("Failed to fetch route config data:", error.message, error)
+        return { routes: [], routesById: {} }
+    }
+
+    if (!routes) {
+        return { routes: [], routesById: {} }
     }
 
     const routesById: Record<string, VehicleRoute> = {}

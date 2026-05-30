@@ -1,4 +1,4 @@
-import PTVTrainTracker from "@/components/map/PTVTrainTracker"
+import PTVTrainTracker from "@/components/train-tracker"
 
 export default function Home() {
   return <PTVTrainTracker />
