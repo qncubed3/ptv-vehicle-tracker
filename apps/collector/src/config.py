@@ -33,6 +33,10 @@ def load_config():
         'poll_interval': int(os.getenv('POLL_INTERVAL', '30')),
         'parallel_workers': int(os.getenv('PARALLEL_WORKERS', '10')),
         'enable_db_write': _env_bool('ENABLE_DB_WRITE', default=True),
+        # How long to keep vehicle location rows before cleanup deletes them.
+        'retention_hours': int(os.getenv('RETENTION_HOURS', '24')),
+        # Ignore tiny GPS jitter below this distance in degrees (~11m at Melbourne).
+        'min_move_degrees': float(os.getenv('MIN_MOVE_DEGREES', '0.0001')),
     }
     
     # Validate required fields
@@ -45,8 +49,14 @@ def load_config():
     missing = [key for key in required if not config[key]]
     
     if missing:
-        print("Current config:", config)
+        print("Current config:", {k: ('***' if 'key' in k or 'url' in k else v) for k, v in config.items()})
         raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+
+    if config['retention_hours'] <= 0:
+        raise ValueError("RETENTION_HOURS must be greater than 0")
+
+    if config['poll_interval'] <= 0:
+        raise ValueError("POLL_INTERVAL must be greater than 0")
     
     return config
 
@@ -66,5 +76,7 @@ def print_config(config):
     
     print(f"Poll Interval: {config['poll_interval']} seconds")
     print(f"Max Parallel Workers: {config['parallel_workers']}")
+    print(f"Retention Hours: {config['retention_hours']}")
+    print(f"Min Move Degrees: {config['min_move_degrees']}")
     print(f"DB Writes: {'ENABLED' if config['enable_db_write'] else 'DISABLED (dry-run)'}")
     print("="*60 + "\n")

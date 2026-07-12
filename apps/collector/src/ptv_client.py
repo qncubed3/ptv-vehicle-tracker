@@ -4,7 +4,6 @@ import hmac
 import hashlib
 import urllib.request
 import urllib.parse
-from datetime import datetime
 import time
 import traceback
 
@@ -100,7 +99,11 @@ class PTVClient:
         if not response:
             return []
         
-        route_ids = [route.get("route_id") for route in response.get("routes", [])]
+        route_ids = [
+            route.get("route_id")
+            for route in response.get("routes", [])
+            if route.get("route_id") is not None
+        ]
         
         # Cache the results
         self._route_cache[route_type] = route_ids
@@ -135,6 +138,7 @@ class PTVClient:
         Option to use cache of route ids
         """
         route_type_name = {0: "train", 1: "tram", 2: "bus", 3: "vline"}.get(route_type, "unknown")
+        used_cache = use_cache and route_type in self._route_cache
         
         route_ids = self.get_routes(route_type=route_type, use_cache=use_cache)
         
@@ -142,13 +146,12 @@ class PTVClient:
             print(f"No {route_type_name} routes found")
             return []
         
-        cache_status = "from cache" if use_cache and route_type in self._route_cache else "from API"
+        cache_status = "from cache" if used_cache else "from API"
         print(f"Found {len(route_ids)} {route_type_name} routes ({cache_status})")
         
 
         vehicles = self._fetch_vehicles_parallel(route_ids, route_type)
-        
-        return vehicles
+        return self._dedupe_vehicles(vehicles)
     
 
     def _fetch_vehicles_parallel(self, route_ids, route_type):
@@ -184,6 +187,24 @@ class PTVClient:
                     print(f"Error fetching route {route_id}: {e}")
         
         return vehicles
+
+    def _dedupe_vehicles(self, vehicles):
+        """
+        Keep one reading per vehicle_id.
+        If the same vehicle appears more than once, keep the newest timestamp.
+        """
+        newest_by_id = {}
+
+        for vehicle in vehicles:
+            vehicle_id = vehicle.get('vehicle_id')
+            if not vehicle_id:
+                continue
+
+            existing = newest_by_id.get(vehicle_id)
+            if existing is None or vehicle.get('timestamp', '') >= existing.get('timestamp', ''):
+                newest_by_id[vehicle_id] = vehicle
+
+        return list(newest_by_id.values())
     
 
     def _extract_vehicle_data(self, run, route_type):
@@ -191,28 +212,38 @@ class PTVClient:
         Extract vehicle data from a run object
         """
 
-        pos = run.get("vehicle_position", {})
-        
-        # Skip if no valid coordinates
-        if not pos.get("latitude") or not pos.get("longitude"):
+        pos = run.get("vehicle_position") or {}
+
+        latitude = pos.get("latitude")
+        longitude = pos.get("longitude")
+        timestamp = pos.get("datetime_utc")
+        vehicle_id = run.get('run_ref') or run.get('run_id')
+
+        # Skip incomplete readings before they reach the database.
+        if latitude is None or longitude is None:
+            return None
+
+        if not timestamp or not vehicle_id:
             return None
         
+        bearing = pos.get('bearing')
+
         return {
-            'vehicle_id': str(run.get('run_ref', run.get('run_id', ''))),
+            'vehicle_id': str(vehicle_id),
             'route_id': str(run.get('route_id', '')),
             'run_id': str(run.get('run_id', '')),
-            'latitude': float(pos.get('latitude')),
-            'longitude': float(pos.get('longitude')),
-            'timestamp': pos.get('datetime_utc', ''),
+            'latitude': float(latitude),
+            'longitude': float(longitude),
+            'timestamp': timestamp,
             'direction_id': run.get('direction_id'),
-            'heading': float(pos.get('bearing', 0)) if pos.get('bearing') else None,
+            'heading': float(bearing) if bearing is not None else None,
             'route_type': route_type
         }
 
 
 if __name__ == '__main__':
     """
-    Test retreival of data from PTV API
+    Test retrieval of data from PTV API
     """
     
     # Load environment variables
@@ -242,7 +273,7 @@ if __name__ == '__main__':
         vehicles = client.fetch_vehicles(route_type=0, use_cache=True)
         elapsed = time.time() - start
         print(f"Time: {elapsed:.2f} seconds")
-        print(f"Retreived {len(vehicles)} vehicles")
+        print(f"Retrieved {len(vehicles)} vehicles")
         
 
         # Show first n vehicles

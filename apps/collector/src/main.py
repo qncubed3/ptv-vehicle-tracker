@@ -6,6 +6,11 @@ from .db import create_database
 from .route_corrections import correct_route_id
 
 
+# How often to delete old rows and print database stats.
+CLEANUP_EVERY_N_CYCLES = 20
+STATS_EVERY_N_CYCLES = 40
+
+
 class VehicleCollector:
     """
     Main collector class that orchestrates everything
@@ -19,6 +24,8 @@ class VehicleCollector:
         self.config = config
         self.poll_interval = config['poll_interval']
         self.enable_db_write = config['enable_db_write']
+        self.retention_hours = config['retention_hours']
+        self.min_move_degrees = config['min_move_degrees']
         
         # Initialise PTV API client
         self.ptv_client = PTVClient(
@@ -42,10 +49,14 @@ class VehicleCollector:
     
     def should_store(self, vehicle):
         """
-        Determine if we should store this vehicle's position. Only store if vehicle is new or has moved
+        Determine if we should store this vehicle's position.
+        Only store if the vehicle is new or has moved enough to matter.
         """
 
         vehicle_id = vehicle.get('vehicle_id')
+
+        if not vehicle_id:
+            return False
         
         # Always store if we haven't seen this vehicle
         if vehicle_id not in self.last_positions:
@@ -53,16 +64,11 @@ class VehicleCollector:
         
         last = self.last_positions[vehicle_id]
         
-        # Check if position changed
         lat_diff = abs(vehicle.get('latitude', 0) - last.get('latitude', 0))
         lng_diff = abs(vehicle.get('longitude', 0) - last.get('longitude', 0))
-        
-        position_changed = lat_diff != 0 or lng_diff != 0
-        
-        if position_changed:
-            return True
-        
-        return False
+
+        # Ignore tiny GPS jitter so we do not store near-duplicate rows.
+        return lat_diff >= self.min_move_degrees or lng_diff >= self.min_move_degrees
     
     def collect_once(self, route_type=0):
         """
@@ -91,6 +97,11 @@ class VehicleCollector:
             # Filter vehicles that should be stored
             vehicles_to_store = []
             for vehicle in vehicles:
+                if not vehicle.get('vehicle_id') or not vehicle.get('timestamp'):
+                    continue
+
+                if vehicle.get('latitude') is None or vehicle.get('longitude') is None:
+                    continue
 
                 vehicle['route_id'] = correct_route_id(
                     vehicle.get('longitude'),
@@ -101,33 +112,31 @@ class VehicleCollector:
 
                 if self.should_store(vehicle):
                     vehicles_to_store.append(vehicle)
-                    # Update cache
-                    self.last_positions[vehicle.get('vehicle_id')] = vehicle
+
+            # One row per vehicle per cycle. Keep the last reading if duplicates appear.
+            vehicles_to_store = self._dedupe_by_vehicle_id(vehicles_to_store)
             
             # Store in database
             if vehicles_to_store:
                 if self.enable_db_write:
-                    self.db.insert_vehicles_bulk(vehicles_to_store)
+                    inserted = self.db.insert_vehicles_bulk(vehicles_to_store)
+
+                    # Only update the cache after a successful write so failed
+                    # inserts can be retried on the next cycle.
+                    if inserted is None:
+                        print("Skipping position cache update after failed insert")
+                        return
+
+                    self._update_last_positions(vehicles_to_store)
                     print(f"Stored {len(vehicles_to_store)} new positions in database")
                 else:
+                    self._update_last_positions(vehicles_to_store)
                     print(f"Found {len(vehicles_to_store)} new positions")
                     print(f"Sample vehicles: {[v['vehicle_id'] for v in vehicles_to_store[:5]]}")
                 
-                print(f"   (Filtered {len(vehicles) - len(vehicles_to_store)} unchanged)")
+                print(f"   (Filtered {len(vehicles) - len(vehicles_to_store)} unchanged/invalid)")
             else:
                 print("No new positions to store")
-            
-            # Periodic cleanup (only if db writes enabled)
-            if self.enable_db_write and len(self.last_positions) % 20 == 0:
-                print("\nRunning cleanup...")
-                self.db.cleanup_old_data(hours=24)
-            
-            # Show stats periodically (only if db writes enabled)
-            if self.enable_db_write and len(self.last_positions) % 40 == 0:
-                print("\nDatabase stats:")
-                stats = self.db.get_stats()
-                for key, value in stats.items():
-                    print(f"   {key}: {value}")
             
         except KeyboardInterrupt:
             raise 
@@ -135,6 +144,42 @@ class VehicleCollector:
             print(f"Error: {e}")
             import traceback
             traceback.print_exc()
+
+    def _dedupe_by_vehicle_id(self, vehicles):
+        deduped = {}
+        for vehicle in vehicles:
+            vehicle_id = vehicle.get('vehicle_id')
+            if vehicle_id:
+                deduped[vehicle_id] = vehicle
+        return list(deduped.values())
+
+    def _update_last_positions(self, vehicles):
+        for vehicle in vehicles:
+            vehicle_id = vehicle.get('vehicle_id')
+            if vehicle_id:
+                self.last_positions[vehicle_id] = vehicle
+
+    def run_maintenance(self, cycle_count):
+        """
+        Periodically delete old rows and print database stats.
+        Uses collection cycle count so this keeps running after fleet size stabilises.
+        """
+        if not self.enable_db_write or not self.db:
+            return
+
+        if cycle_count % CLEANUP_EVERY_N_CYCLES == 0:
+            print("\nRunning cleanup...")
+            deleted = self.db.cleanup_old_data(hours=self.retention_hours)
+            print(
+                f"Deleted {deleted} vehicle location rows "
+                f"older than {self.retention_hours} hours"
+            )
+
+        if cycle_count % STATS_EVERY_N_CYCLES == 0:
+            print("\nDatabase stats:")
+            stats = self.db.get_stats()
+            for key, value in stats.items():
+                print(f"   {key}: {value}")
     
     def run_forever(self, route_type=0):
         """
@@ -152,6 +197,8 @@ class VehicleCollector:
                 # Run collection
                 self.collect_once(route_type=route_type)
                 cycle_count += 1
+
+                self.run_maintenance(cycle_count)
                 
                 # Calculate sleep time to maintain consistent interval
                 elapsed = time.time() - start_time

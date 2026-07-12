@@ -19,7 +19,10 @@ class PostgresDatabase:
         """
         Create a new database connection
         """
-        return psycopg2.connect(self.database_url)
+        return psycopg2.connect(
+            self.database_url,
+            connect_timeout=10
+        )
     
     def execute(self, query, params=None):
         """
@@ -72,27 +75,44 @@ class PostgresDatabase:
     
 
     def insert_vehicles_bulk(self, vehicles):
+        """
+        Insert many vehicle locations in one query.
+        Returns the number of rows attempted on success, or None on failure.
+        """
         if not vehicles:
+            return 0
+
+        # Drop incomplete rows before they hit Postgres.
+        values = []
+        for vehicle in vehicles:
+            vehicle_id = vehicle.get('vehicle_id')
+            timestamp = vehicle.get('timestamp')
+            latitude = vehicle.get('latitude')
+            longitude = vehicle.get('longitude')
+
+            if not vehicle_id or not timestamp:
+                continue
+
+            if latitude is None or longitude is None:
+                continue
+
+            values.append((
+                vehicle_id,
+                vehicle.get('route_id'),
+                vehicle.get('run_id'),
+                latitude,
+                longitude,
+                timestamp,
+                vehicle.get('direction_id'),
+                vehicle.get('heading'),
+                vehicle.get('route_type', 0)
+            ))
+
+        if not values:
             return 0
         
         connection = self._get_connection()
         cursor = connection.cursor()
-        
-        # Prepare values as tuples
-        values = [
-            (
-                v.get('vehicle_id'),
-                v.get('route_id'),
-                v.get('run_id'),
-                v.get('latitude'),
-                v.get('longitude'),
-                v.get('timestamp'),
-                v.get('direction_id'),
-                v.get('heading'),
-                v.get('route_type', 0)
-            )
-            for v in vehicles
-        ]
         
         query = """
             INSERT INTO vehicle_locations
@@ -109,24 +129,55 @@ class PostgresDatabase:
         except Exception as e:
             connection.rollback()
             print(f"Error bulk inserting vehicles: {e}")
-            return 0
+            return None
         finally:
             cursor.close()
             connection.close()
     
     def cleanup_old_data(self, hours=24):
         """
-        Delete records older than specified hours
+        Delete records older than the given number of hours.
+        Returns how many rows were deleted.
         """
 
+        deleted = 0
+        connection = self._get_connection()
+        cursor = connection.cursor()
+
+        # Multiply an interval so the hour count is a real query parameter.
         query = """
             DELETE FROM vehicle_locations
-            WHERE timestamp < NOW() - INTERVAL '%s hours'
+            WHERE timestamp < NOW() - (%s * INTERVAL '1 hour')
         """
-        
-        result = self.execute(query, (hours,))
-        return 0
-    
+
+        try:
+            cursor.execute(query, (hours,))
+            deleted = cursor.rowcount
+            connection.commit()
+        except Exception as e:
+            connection.rollback()
+            print(f"Cleanup error: {e}")
+            return 0
+        finally:
+            cursor.close()
+            connection.close()
+
+        # Reclaim disk space from deleted rows so Supabase quota can shrink.
+        # VACUUM cannot run inside a transaction, so use a fresh connection.
+        try:
+            vacuum_connection = self._get_connection()
+            vacuum_connection.autocommit = True
+            vacuum_cursor = vacuum_connection.cursor()
+            try:
+                vacuum_cursor.execute("VACUUM vehicle_locations")
+            finally:
+                vacuum_cursor.close()
+                vacuum_connection.close()
+        except Exception as e:
+            print(f"VACUUM warning: {e}")
+
+        return deleted
+
     def get_stats(self):
         """
         Get database statistics
@@ -160,10 +211,7 @@ def create_database(config):
     if not config.get('database_url'):
         raise ValueError("DATABASE_URL not provided in configuration")
     
-    try:
-        return PostgresDatabase(config['database_url'])
-    except Exception as e:
-        print(f"Error: {e}")
+    return PostgresDatabase(config['database_url'])
 
 
 if __name__ == '__main__':
