@@ -35,8 +35,6 @@ def load_config():
         'enable_db_write': _env_bool('ENABLE_DB_WRITE', default=True),
         # How long to keep vehicle location rows before cleanup deletes them.
         'retention_hours': int(os.getenv('RETENTION_HOURS', '24')),
-        # Ignore tiny GPS jitter below this distance in degrees (~11m at Melbourne).
-        'min_move_degrees': float(os.getenv('MIN_MOVE_DEGREES', '0.0001')),
     }
     
     # Validate required fields

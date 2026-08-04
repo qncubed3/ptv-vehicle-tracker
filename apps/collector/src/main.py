@@ -25,7 +25,6 @@ class VehicleCollector:
         self.poll_interval = config['poll_interval']
         self.enable_db_write = config['enable_db_write']
         self.retention_hours = config['retention_hours']
-        self.min_move_degrees = config['min_move_degrees']
         
         # Initialise PTV API client
         self.ptv_client = PTVClient(
@@ -50,7 +49,7 @@ class VehicleCollector:
     def should_store(self, vehicle):
         """
         Determine if we should store this vehicle's position.
-        Only store if the vehicle is new or has moved enough to matter.
+        Only store if the vehicle is new.
         """
 
         vehicle_id = vehicle.get('vehicle_id')
@@ -67,8 +66,7 @@ class VehicleCollector:
         lat_diff = abs(vehicle.get('latitude', 0) - last.get('latitude', 0))
         lng_diff = abs(vehicle.get('longitude', 0) - last.get('longitude', 0))
 
-        # Ignore tiny GPS jitter so we do not store near-duplicate rows.
-        return lat_diff >= self.min_move_degrees or lng_diff >= self.min_move_degrees
+        return lat_diff >= 0 or lng_diff >= 0
     
     def collect_once(self, route_type=0):
         """
